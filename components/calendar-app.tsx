@@ -1,18 +1,20 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { CalendarHeader } from "./calendar-header"
-import { CalendarGrid } from "./calendar-grid"
+import { ResponsiveCalendarGrid } from "./responsive-calendar-grid"
 import { EventModal } from "./event-modal"
 import { TelegramSettings } from "./telegram-settings"
 import { ThemeProvider } from "./theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 import { Button } from "@/components/ui/button"
-import { Settings, X } from "lucide-react"
+import { X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { AuthProvider, useAuth } from "./auth-provider"
 import { AuthModal } from "./auth-modal"
 import { EventsService } from "@/lib/events-service"
+import { MobileHeader } from "./mobile-header"
+import { DesktopHeader } from "./desktop-header"
+import { MobileCalendarNavigation } from "./mobile-calendar-navigation"
 
 export interface Event {
   id: string
@@ -21,7 +23,7 @@ export interface Event {
   date: Date
   startTime: string
   endTime: string
-  reminder?: number // minutes before event
+  reminder?: number
   color: string
   location?: string
 }
@@ -101,7 +103,6 @@ function CalendarAppContent() {
 
     try {
       if (selectedEvent) {
-        // Update existing event
         const updatedEvent = await EventsService.updateEvent(selectedEvent.id, eventData)
         setEvents((prev) => prev.map((event) => (event.id === selectedEvent.id ? updatedEvent : event)))
         toast({
@@ -109,7 +110,6 @@ function CalendarAppContent() {
           description: "Your event has been successfully updated.",
         })
       } else {
-        // Create new event
         const newEvent = await EventsService.createEvent(eventData)
         setEvents((prev) => [...prev, newEvent])
         toast({
@@ -152,19 +152,6 @@ function CalendarAppContent() {
     }
   }
 
-  const handleSignOut = async () => {
-    try {
-      await signOut()
-      setEvents([])
-      toast({
-        title: "Signed out",
-        description: "You have been successfully signed out.",
-      })
-    } catch (error) {
-      console.error("Error signing out:", error)
-    }
-  }
-
   if (authLoading || isLoading) {
     return (
       <ThemeProvider>
@@ -177,45 +164,33 @@ function CalendarAppContent() {
 
   return (
     <ThemeProvider>
-      <div className="min-h-screen bg-background transition-colors duration-300 safe-area-inset">
-        <div className="container mx-auto p-2 md:p-4 max-w-7xl">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex-1">
-              <CalendarHeader
-                currentDate={currentDate}
-                onDateChange={setCurrentDate}
-                onCreateEvent={() => handleCreateEvent()}
-              />
-            </div>
-            <div className="flex items-center gap-2 ml-4">
-              {user && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>Welcome, {user.email}</span>
-                  <Button variant="ghost" size="sm" onClick={handleSignOut}>
-                    Sign Out
-                  </Button>
-                </div>
-              )}
-              {!user && (
-                <Button variant="outline" onClick={() => setIsAuthModalOpen(true)}>
-                  Sign In
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setIsSettingsOpen(true)}
-                className="hover:scale-105 transition-transform duration-200"
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+      <div className="min-h-screen bg-background transition-colors duration-300">
+        {/* Mobile Header */}
+        <MobileHeader
+          onCreateEvent={() => handleCreateEvent()}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+        />
 
+        {/* Desktop Header */}
+        <DesktopHeader
+          currentDate={currentDate}
+          onDateChange={setCurrentDate}
+          onCreateEvent={() => handleCreateEvent()}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+        />
+
+        {/* Mobile Calendar Navigation */}
+        <MobileCalendarNavigation currentDate={currentDate} onDateChange={setCurrentDate} />
+
+        {/* Main Content */}
+        <div className="px-2 pb-4 md:px-4 md:pb-6">
+          {/* Sign in prompt for non-authenticated users */}
           {!user && (
-            <div className="mb-6 p-4 bg-muted/50 rounded-lg border border-border">
-              <p className="text-center text-muted-foreground">
-                <Button variant="link" onClick={() => setIsAuthModalOpen(true)} className="p-0 h-auto">
+            <div className="mb-4 p-3 bg-muted/50 rounded-lg border border-border mx-2 md:mx-0">
+              <p className="text-center text-sm text-muted-foreground">
+                <Button variant="link" onClick={() => setIsAuthModalOpen(true)} className="p-0 h-auto text-sm">
                   Sign in
                 </Button>{" "}
                 to save your events and sync across devices
@@ -223,43 +198,45 @@ function CalendarAppContent() {
             </div>
           )}
 
-          <CalendarGrid
+          {/* Calendar Grid */}
+          <ResponsiveCalendarGrid
             currentDate={currentDate}
             events={events}
             onCreateEvent={handleCreateEvent}
             onEditEvent={handleEditEvent}
           />
+        </div>
 
-          <EventModal
-            isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
-            onSave={handleSaveEvent}
-            onDelete={handleDeleteEvent}
-            event={selectedEvent}
-            selectedDate={selectedDate}
-          />
+        {/* Modals */}
+        <EventModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSave={handleSaveEvent}
+          onDelete={handleDeleteEvent}
+          event={selectedEvent}
+          selectedDate={selectedDate}
+        />
 
-          <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+        <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
 
-          {/* Settings Modal */}
-          {isSettingsOpen && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-background rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-300">
-                <div className="flex items-center justify-between p-4 border-b">
-                  <h2 className="text-lg font-semibold">Settings</h2>
-                  <Button variant="ghost" size="icon" onClick={() => setIsSettingsOpen(false)}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="p-4">
-                  <TelegramSettings />
-                </div>
+        {/* Settings Modal */}
+        {isSettingsOpen && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-background rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-300">
+              <div className="flex items-center justify-between p-4 border-b">
+                <h2 className="text-lg font-semibold">Settings</h2>
+                <Button variant="ghost" size="icon" onClick={() => setIsSettingsOpen(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="p-4">
+                <TelegramSettings />
               </div>
             </div>
-          )}
-        </div>
-        <Toaster />
+          </div>
+        )}
       </div>
+      <Toaster />
     </ThemeProvider>
   )
 }
