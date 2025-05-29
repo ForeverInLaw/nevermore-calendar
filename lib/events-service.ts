@@ -1,0 +1,161 @@
+import { supabase } from "./supabase"
+import type { DatabaseEvent } from "./supabase"
+import type { Event } from "@/components/calendar-app"
+
+// Convert database event to app event format
+export function dbEventToAppEvent(dbEvent: DatabaseEvent): Event {
+  return {
+    id: dbEvent.id,
+    title: dbEvent.title,
+    description: dbEvent.description,
+    date: new Date(dbEvent.event_date + "T12:00:00"), // Set to noon to avoid timezone issues
+    startTime: dbEvent.start_time,
+    endTime: dbEvent.end_time,
+    location: dbEvent.location,
+    color: dbEvent.color,
+    reminder: dbEvent.reminder_minutes,
+  }
+}
+
+// Convert app event to database format
+export function appEventToDbEvent(
+  event: Omit<Event, "id">,
+  userId: string,
+): Omit<DatabaseEvent, "id" | "created_at" | "updated_at"> {
+  return {
+    user_id: userId,
+    title: event.title,
+    description: event.description || null,
+    event_date: event.date.toISOString().split("T")[0], // YYYY-MM-DD format
+    start_time: event.startTime,
+    end_time: event.endTime,
+    location: event.location || null,
+    color: event.color,
+    reminder_minutes: event.reminder || 15,
+    reminder_sent: false,
+  }
+}
+
+export class EventsService {
+  // Get all events for the current user
+  static async getEvents(): Promise<Event[]> {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      throw new Error("User not authenticated")
+    }
+
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("event_date", { ascending: true })
+
+    if (error) {
+      throw error
+    }
+
+    return data.map(dbEventToAppEvent)
+  }
+
+  // Create a new event
+  static async createEvent(event: Omit<Event, "id">): Promise<Event> {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      throw new Error("User not authenticated")
+    }
+
+    const dbEvent = appEventToDbEvent(event, user.id)
+
+    const { data, error } = await supabase.from("events").insert([dbEvent]).select().single()
+
+    if (error) {
+      throw error
+    }
+
+    return dbEventToAppEvent(data)
+  }
+
+  // Update an existing event
+  static async updateEvent(eventId: string, event: Omit<Event, "id">): Promise<Event> {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      throw new Error("User not authenticated")
+    }
+
+    const dbEvent = appEventToDbEvent(event, user.id)
+
+    const { data, error } = await supabase
+      .from("events")
+      .update({ ...dbEvent, updated_at: new Date().toISOString() })
+      .eq("id", eventId)
+      .eq("user_id", user.id) // Ensure user can only update their own events
+      .select()
+      .single()
+
+    if (error) {
+      throw error
+    }
+
+    return dbEventToAppEvent(data)
+  }
+
+  // Delete an event
+  static async deleteEvent(eventId: string): Promise<void> {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      throw new Error("User not authenticated")
+    }
+
+    const { error } = await supabase.from("events").delete().eq("id", eventId).eq("user_id", user.id) // Ensure user can only delete their own events
+
+    if (error) {
+      throw error
+    }
+  }
+
+  // Get events that need reminders
+  static async getEventsNeedingReminders(): Promise<DatabaseEvent[]> {
+    const now = new Date()
+    const { data, error } = await supabase
+      .from("events")
+      .select(`
+        *,
+        users!inner(telegram_chat_id, reminder_notifications_enabled)
+      `)
+      .eq("reminder_sent", false)
+      .eq("users.reminder_notifications_enabled", true)
+      .not("users.telegram_chat_id", "is", null)
+      .gte("event_date", now.toISOString().split("T")[0])
+
+    if (error) {
+      throw error
+    }
+
+    return data.filter((event) => {
+      const eventDateTime = new Date(`${event.event_date}T${event.start_time}`)
+      const reminderTime = new Date(eventDateTime.getTime() - event.reminder_minutes * 60 * 1000)
+      return reminderTime <= now
+    })
+  }
+
+  // Mark reminder as sent
+  static async markReminderSent(eventId: string): Promise<void> {
+    const { error } = await supabase.from("events").update({ reminder_sent: true }).eq("id", eventId)
+
+    if (error) {
+      throw error
+    }
+  }
+}

@@ -43,6 +43,14 @@ const reminderOptions = [
   { value: 1440, label: "1 day before" },
 ]
 
+// Helper function to format date for input
+const formatDateForInput = (date: Date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedDate }: EventModalProps) {
   const [formData, setFormData] = useState({
     title: "",
@@ -70,7 +78,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
       setFormData({
         title: event.title,
         description: event.description || "",
-        date: event.date.toISOString().split("T")[0],
+        date: formatDateForInput(event.date),
         startTime: event.startTime,
         endTime: event.endTime,
         location: event.location || "",
@@ -79,9 +87,15 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
         sendNotifications: true,
       })
     } else if (selectedDate) {
+      console.log("Setting form data for selected date:", {
+        selectedDate,
+        formattedDate: formatDateForInput(selectedDate),
+        dateString: selectedDate.toDateString(),
+      })
+
       setFormData((prev) => ({
         ...prev,
-        date: selectedDate.toISOString().split("T")[0],
+        date: formatDateForInput(selectedDate),
         title: "",
         description: "",
         startTime: "09:00",
@@ -99,10 +113,23 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
     setIsLoading(true)
 
     try {
+      // Create date object from form data
+      const [year, month, day] = formData.date.split("-").map(Number)
+      const eventDate = new Date(year, month - 1, day, 12, 0, 0, 0) // Set to noon to avoid timezone issues
+
+      console.log("Creating event with date:", {
+        formDate: formData.date,
+        parsedYear: year,
+        parsedMonth: month - 1,
+        parsedDay: day,
+        createdDate: eventDate,
+        dateString: eventDate.toDateString(),
+      })
+
       const eventData = {
         title: formData.title,
         description: formData.description,
-        date: new Date(formData.date),
+        date: eventDate,
         startTime: formData.startTime,
         endTime: formData.endTime,
         location: formData.location,
@@ -211,10 +238,14 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
                 id="date"
                 type="date"
                 value={formData.date}
-                onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
+                onChange={(e) => {
+                  console.log("Date input changed:", e.target.value)
+                  setFormData((prev) => ({ ...prev, date: e.target.value }))
+                }}
                 required
                 className="transition-all duration-200 focus:scale-[1.02] text-base"
               />
+              <p className="text-xs text-muted-foreground">Selected: {formData.date}</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="location" className="text-sm">
