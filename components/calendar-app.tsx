@@ -15,6 +15,7 @@ import { EventsService } from "@/lib/events-service"
 import { MobileHeader } from "./mobile-header"
 import { DesktopHeader } from "./desktop-header"
 import { MobileCalendarNavigation } from "./mobile-calendar-navigation"
+import { MobileCalendarView } from "./mobile-calendar-view"
 
 export interface Event {
   id: string
@@ -317,12 +318,25 @@ function CalendarAppContent() {
           )}
 
           {/* Calendar Grid */}
-          <ResponsiveCalendarGrid
-            currentDate={currentDate}
-            events={events}
-            onCreateEvent={handleCreateEvent}
-            onEditEvent={handleEditEvent}
-          />
+          <div className="hidden md:block">
+            <ResponsiveCalendarGrid
+              currentDate={currentDate}
+              events={events}
+              onCreateEvent={handleCreateEvent}
+              onEditEvent={handleEditEvent}
+            />
+          </div>
+
+          {/* Mobile Calendar View */}
+          <div className="md:hidden">
+            <MobileCalendarView
+              currentDate={currentDate}
+              events={events}
+              onCreateEvent={handleCreateEvent}
+              onEditEvent={handleEditEvent}
+              onDateChange={setCurrentDate}
+            />
+          </div>
         </div>
 
         {/* Modals */}
