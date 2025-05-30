@@ -6,6 +6,7 @@ export async function GET() {
     console.log("🔄 Cron job started: checking for events needing reminders...")
 
     const now = new Date()
+    console.log(`Current time: ${now.toISOString()}`)
 
     // Получаем события, которым нужно отправить напоминание
     const { data: events, error } = await supabaseServer
@@ -24,10 +25,18 @@ export async function GET() {
       return NextResponse.json({ error: "Database error" }, { status: 500 })
     }
 
+    console.log(`Found ${events?.length || 0} events in database`)
+
     // Фильтруем события по времени напоминания
     const eventsToRemind = (events || []).filter((event) => {
       const eventDateTime = new Date(`${event.event_date}T${event.start_time}`)
       const reminderTime = new Date(eventDateTime.getTime() - event.reminder_minutes * 60 * 1000)
+
+      console.log(`Event: ${event.title}`)
+      console.log(`Event time: ${eventDateTime.toISOString()}`)
+      console.log(`Reminder time: ${reminderTime.toISOString()}`)
+      console.log(`Should remind: ${reminderTime <= now && now < eventDateTime}`)
+
       return reminderTime <= now && now < eventDateTime
     })
 
@@ -38,6 +47,7 @@ export async function GET() {
         success: true,
         message: "No events need reminders at this time",
         count: 0,
+        currentTime: now.toISOString(),
       })
     }
 
@@ -110,6 +120,7 @@ export async function GET() {
       message: `Processed ${eventsToRemind.length} events`,
       successCount,
       errorCount,
+      currentTime: now.toISOString(),
       events: eventsToRemind.map((e) => ({ id: e.id, title: e.title })),
     })
   } catch (error) {

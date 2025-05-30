@@ -200,49 +200,4 @@ export class EventsService {
       throw error
     }
   }
-
-  // Get events that need reminders (for cron job)
-  static async getEventsNeedingReminders(): Promise<any[]> {
-    try {
-      const now = new Date()
-
-      const { data, error } = await supabase
-        .from("events")
-        .select(`
-          *,
-          users!inner(telegram_chat_id, reminder_notifications_enabled)
-        `)
-        .eq("reminder_sent", false)
-        .eq("users.reminder_notifications_enabled", true)
-        .not("users.telegram_chat_id", "is", null)
-        .gte("event_date", now.toISOString().split("T")[0])
-
-      if (error) {
-        throw new Error(`Database error: ${error.message}`)
-      }
-
-      return (data || []).filter((event) => {
-        const eventDateTime = new Date(`${event.event_date}T${event.start_time}`)
-        const reminderTime = new Date(eventDateTime.getTime() - event.reminder_minutes * 60 * 1000)
-        return reminderTime <= now && now < eventDateTime
-      })
-    } catch (error) {
-      console.error("Error in getEventsNeedingReminders:", error)
-      throw error
-    }
-  }
-
-  // Mark reminder as sent
-  static async markReminderSent(eventId: string): Promise<void> {
-    try {
-      const { error } = await supabase.from("events").update({ reminder_sent: true }).eq("id", eventId)
-
-      if (error) {
-        throw new Error(`Database error: ${error.message}`)
-      }
-    } catch (error) {
-      console.error("Error in markReminderSent:", error)
-      throw error
-    }
-  }
 }
