@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar, Clock, MapPin, Bell, Trash2, Save, MessageCircle } from "lucide-react"
 import type { Event } from "./calendar-app"
-import { sendEventNotification, sendEventCreationConfirmation } from "@/app/actions"
+import { sendEventCreationConfirmation } from "@/app/actions"
 import { useToast } from "@/hooks/use-toast"
 
 interface EventModalProps {
@@ -147,17 +147,7 @@ export function EventModal({
             location: formData.location,
           })
 
-          if (formData.reminder > 0 && telegramSettings?.enableReminders) {
-            await sendEventNotification({
-              title: formData.title,
-              date: formData.date,
-              startTime: formData.startTime,
-              reminderMinutes: formData.reminder,
-              chatId: telegramSettings.chatId,
-              description: formData.description,
-              location: formData.location,
-            })
-          }
+          // НЕ отправляем напоминание сразу - оно будет отправлено cron job'ом в нужное время
         } catch (notificationError) {
           console.error("Failed to send Telegram notifications:", notificationError)
           // Don't show error to user as the event was saved successfully

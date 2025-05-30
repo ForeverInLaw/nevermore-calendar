@@ -203,7 +203,7 @@ export function ResponsiveCalendarGrid({
 
                 {/* More events indicator */}
                 {remainingCount > 0 && (
-                  <div onClick={(e) => e.stopPropagation()}>
+                  <div onClick={(e) => e.stopPropagation()} className="mt-1">
                     <EventsPopover
                       events={dayEvents}
                       onEditEvent={onEditEvent}

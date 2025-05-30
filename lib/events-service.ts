@@ -201,10 +201,11 @@ export class EventsService {
     }
   }
 
-  // Get events that need reminders
-  static async getEventsNeedingReminders(): Promise<DatabaseEvent[]> {
+  // Get events that need reminders (for cron job)
+  static async getEventsNeedingReminders(): Promise<any[]> {
     try {
       const now = new Date()
+
       const { data, error } = await supabase
         .from("events")
         .select(`
@@ -223,7 +224,7 @@ export class EventsService {
       return (data || []).filter((event) => {
         const eventDateTime = new Date(`${event.event_date}T${event.start_time}`)
         const reminderTime = new Date(eventDateTime.getTime() - event.reminder_minutes * 60 * 1000)
-        return reminderTime <= now
+        return reminderTime <= now && now < eventDateTime
       })
     } catch (error) {
       console.error("Error in getEventsNeedingReminders:", error)
