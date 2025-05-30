@@ -234,5 +234,116 @@ select {
   .safe-area-inset {
     padding-left: max(1rem, env(safe-area-inset-left));
     padding-right: max(1rem, env(safe-area-inset-right));
+    padding-top: max(1.5rem, env(safe-area-inset-top));
+  }
+}
+
+/* Mobile-optimized calendar styles */
+@media (max-width: 640px) {
+  /* Compact calendar grid for mobile */
+  .mobile-calendar-grid {
+    font-size: 12px;
+  }
+
+  /* Better touch targets */
+  .mobile-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Optimized event display */
+  .mobile-event {
+    font-size: 8px;
+    line-height: 1.2;
+    padding: 2px 4px;
+  }
+
+  /* Improved readability */
+  .mobile-date-number {
+    font-size: 12px;
+    font-weight: 600;
+  }
+}
+
+/* Landscape orientation optimizations */
+@media (max-width: 640px) and (orientation: landscape) {
+  .landscape-calendar {
+    height: calc(100vh - 120px);
+  }
+
+  .landscape-calendar-grid {
+    min-height: 50px;
+  }
+}
+
+/* Very small screens (< 375px) */
+@media (max-width: 374px) {
+  .xs-calendar-grid {
+    min-height: 50px;
+  }
+
+  .xs-event {
+    font-size: 7px;
+    padding: 1px 2px;
+  }
+
+  .xs-date-number {
+    font-size: 10px;
+  }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .calendar-grid {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Navigation spacing improvements */
+.nav-container {
+  padding-top: clamp(1rem, 4vw, 2rem);
+  padding-bottom: clamp(0.5rem, 2vw, 1rem);
+}
+
+/* Responsive navigation spacing */
+@media (min-width: 768px) {
+  .desktop-nav {
+    padding-top: clamp(1.5rem, 5vw, 2.5rem);
+    padding-bottom: clamp(0.75rem, 2.5vw, 1.25rem);
+  }
+}
+
+@media (max-width: 767px) {
+  .mobile-nav {
+    padding-top: clamp(1rem, 3vw, 1.5rem);
+    padding-bottom: clamp(0.5rem, 1.5vw, 0.75rem);
+  }
+}
+
+/* Improved visual hierarchy */
+.header-spacing {
+  margin-bottom: clamp(1rem, 3vw, 2rem);
+}
+
+/* Better content spacing */
+.content-container {
+  padding-left: clamp(0.75rem, 2vw, 1.5rem);
+  padding-right: clamp(0.75rem, 2vw, 1.5rem);
+  padding-bottom: clamp(1rem, 3vw, 2rem);
+}
+
+/* Enhanced mobile spacing */
+@media (max-width: 640px) {
+  .mobile-content {
+    padding-top: clamp(0.5rem, 2vw, 1rem);
+  }
+}
+
+/* Desktop content spacing */
+@media (min-width: 768px) {
+  .desktop-content {
+    padding-left: clamp(1.5rem, 4vw, 3rem);
+    padding-right: clamp(1.5rem, 4vw, 3rem);
   }
 }

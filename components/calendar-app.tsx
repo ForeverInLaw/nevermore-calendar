@@ -45,7 +45,8 @@ function CalendarAppContent() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const { user, loading: authLoading, signOut } = useAuth()
+  const [isSaving, setIsSaving] = useState(false)
+  const { user, loading: authLoading } = useAuth()
   const { toast } = useToast()
 
   // Load events from database when user is authenticated
@@ -54,7 +55,8 @@ function CalendarAppContent() {
       loadEvents()
     } else if (!authLoading) {
       setIsLoading(false)
-      setEvents([])
+      // Load events from localStorage for non-authenticated users
+      loadLocalEvents()
     }
   }, [user, authLoading])
 
@@ -67,76 +69,192 @@ function CalendarAppContent() {
       console.error("Error loading events:", error)
       toast({
         title: "Error loading events",
-        description: "Failed to load your events from the database.",
+        description: "Failed to load your events from the database. Using local storage instead.",
         variant: "destructive",
       })
+      // Fallback to localStorage
+      loadLocalEvents()
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleCreateEvent = (date?: Date) => {
-    if (!user) {
-      setIsAuthModalOpen(true)
-      return
+  const loadLocalEvents = () => {
+    try {
+      const savedEvents = localStorage.getItem("calendar-events")
+      if (savedEvents) {
+        const parsedEvents = JSON.parse(savedEvents).map((event: any) => ({
+          ...event,
+          date: new Date(event.date),
+        }))
+        setEvents(parsedEvents)
+      }
+    } catch (error) {
+      console.error("Error loading local events:", error)
+      setEvents([])
     }
+  }
+
+  const saveLocalEvents = (eventsToSave: Event[]) => {
+    try {
+      localStorage.setItem("calendar-events", JSON.stringify(eventsToSave))
+    } catch (error) {
+      console.error("Error saving local events:", error)
+    }
+  }
+
+  const handleCreateEvent = (date?: Date) => {
     setSelectedDate(date || new Date())
     setSelectedEvent(null)
     setIsModalOpen(true)
   }
 
   const handleEditEvent = (event: Event) => {
-    if (!user) {
-      setIsAuthModalOpen(true)
-      return
-    }
     setSelectedEvent(event)
     setSelectedDate(null)
     setIsModalOpen(true)
   }
 
   const handleSaveEvent = async (eventData: Omit<Event, "id">) => {
-    if (!user) {
-      setIsAuthModalOpen(true)
-      return
-    }
+    if (isSaving) return // Prevent double submission
+
+    setIsSaving(true)
 
     try {
-      if (selectedEvent) {
-        const updatedEvent = await EventsService.updateEvent(selectedEvent.id, eventData)
-        setEvents((prev) => prev.map((event) => (event.id === selectedEvent.id ? updatedEvent : event)))
-        toast({
-          title: "Event updated",
-          description: "Your event has been successfully updated.",
-        })
+      if (user) {
+        // Save to database for authenticated users
+        if (selectedEvent) {
+          // Update existing event
+          const updatedEvent = await EventsService.updateEvent(selectedEvent.id, eventData)
+          setEvents((prev) => prev.map((event) => (event.id === selectedEvent.id ? updatedEvent : event)))
+          toast({
+            title: "Event updated",
+            description: "Your event has been successfully updated.",
+          })
+        } else {
+          // Create new event
+          try {
+            const newEvent = await EventsService.createEvent(eventData)
+            setEvents((prev) => [...prev, newEvent])
+            toast({
+              title: "Event created",
+              description: "Your event has been successfully created.",
+            })
+          } catch (error) {
+            console.error("Database error:", error)
+
+            // If there's a foreign key constraint error, it might be because the user profile doesn't exist
+            if (error instanceof Error && error.message.includes("foreign key constraint")) {
+              toast({
+                title: "Database error",
+                description: "There was an issue with your user profile. Please try signing out and back in.",
+                variant: "destructive",
+              })
+
+              // Fall back to local storage
+              const newEvent: Event = {
+                ...eventData,
+                id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              }
+              const updatedEvents = [...events, newEvent]
+              setEvents(updatedEvents)
+              saveLocalEvents(updatedEvents)
+            } else {
+              throw error // Re-throw if it's not a foreign key constraint error
+            }
+          }
+        }
       } else {
-        const newEvent = await EventsService.createEvent(eventData)
-        setEvents((prev) => [...prev, newEvent])
-        toast({
-          title: "Event created",
-          description: "Your event has been successfully created.",
-        })
+        // Save to localStorage for non-authenticated users
+        if (selectedEvent) {
+          // Update existing event
+          const updatedEvents = events.map((event) =>
+            event.id === selectedEvent.id ? { ...eventData, id: selectedEvent.id } : event,
+          )
+          setEvents(updatedEvents)
+          saveLocalEvents(updatedEvents)
+          toast({
+            title: "Event updated",
+            description: "Your event has been successfully updated.",
+          })
+        } else {
+          // Create new event
+          const newEvent: Event = {
+            ...eventData,
+            id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          }
+          const updatedEvents = [...events, newEvent]
+          setEvents(updatedEvents)
+          saveLocalEvents(updatedEvents)
+          toast({
+            title: "Event created",
+            description: "Your event has been successfully created.",
+          })
+        }
       }
       setIsModalOpen(false)
     } catch (error) {
       console.error("Error saving event:", error)
+
+      // More specific error handling
+      let errorMessage = "Failed to save your event. Please try again."
+      if (error instanceof Error) {
+        if (error.message.includes("Authentication")) {
+          errorMessage = "Authentication failed. Please sign in again."
+          setIsAuthModalOpen(true)
+        } else if (error.message.includes("Database")) {
+          errorMessage = "Database error. Your event will be saved locally instead."
+          // Try to save locally as fallback
+          try {
+            if (selectedEvent) {
+              const updatedEvents = events.map((event) =>
+                event.id === selectedEvent.id ? { ...eventData, id: selectedEvent.id } : event,
+              )
+              setEvents(updatedEvents)
+              saveLocalEvents(updatedEvents)
+            } else {
+              const newEvent: Event = {
+                ...eventData,
+                id: `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              }
+              const updatedEvents = [...events, newEvent]
+              setEvents(updatedEvents)
+              saveLocalEvents(updatedEvents)
+            }
+            setIsModalOpen(false)
+            return
+          } catch (localError) {
+            console.error("Local save also failed:", localError)
+          }
+        }
+      }
+
       toast({
         title: "Error saving event",
-        description: "Failed to save your event. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       })
+    } finally {
+      setIsSaving(false)
     }
   }
 
   const handleDeleteEvent = async (eventId: string) => {
-    if (!user) {
-      setIsAuthModalOpen(true)
-      return
-    }
-
     try {
-      await EventsService.deleteEvent(eventId)
-      setEvents((prev) => prev.filter((event) => event.id !== eventId))
+      if (user && !eventId.startsWith("local_")) {
+        // Delete from database for authenticated users
+        await EventsService.deleteEvent(eventId)
+      }
+
+      // Always update local state
+      const updatedEvents = events.filter((event) => event.id !== eventId)
+      setEvents(updatedEvents)
+
+      if (!user || eventId.startsWith("local_")) {
+        // Save to localStorage for non-authenticated users or local events
+        saveLocalEvents(updatedEvents)
+      }
+
       setIsModalOpen(false)
       toast({
         title: "Event deleted",
@@ -185,10 +303,10 @@ function CalendarAppContent() {
         <MobileCalendarNavigation currentDate={currentDate} onDateChange={setCurrentDate} />
 
         {/* Main Content */}
-        <div className="px-2 pb-4 md:px-4 md:pb-6">
+        <div className="px-3 pb-6 md:px-6 md:pb-8 pt-2 md:pt-0">
           {/* Sign in prompt for non-authenticated users */}
           {!user && (
-            <div className="mb-4 p-3 bg-muted/50 rounded-lg border border-border mx-2 md:mx-0">
+            <div className="mb-6 p-4 bg-muted/50 rounded-lg border border-border mx-1 md:mx-0">
               <p className="text-center text-sm text-muted-foreground">
                 <Button variant="link" onClick={() => setIsAuthModalOpen(true)} className="p-0 h-auto text-sm">
                   Sign in
@@ -215,6 +333,7 @@ function CalendarAppContent() {
           onDelete={handleDeleteEvent}
           event={selectedEvent}
           selectedDate={selectedDate}
+          isLoading={isSaving}
         />
 
         <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />

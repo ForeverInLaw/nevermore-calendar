@@ -21,6 +21,7 @@ interface EventModalProps {
   onDelete: (eventId: string) => void
   event?: Event | null
   selectedDate?: Date | null
+  isLoading?: boolean
 }
 
 const eventColors = [
@@ -51,7 +52,15 @@ const formatDateForInput = (date: Date) => {
   return `${year}-${month}-${day}`
 }
 
-export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedDate }: EventModalProps) {
+export function EventModal({
+  isOpen,
+  onClose,
+  onSave,
+  onDelete,
+  event,
+  selectedDate,
+  isLoading = false,
+}: EventModalProps) {
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -64,7 +73,6 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
     sendNotifications: true,
   })
   const [telegramSettings, setTelegramSettings] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -87,12 +95,6 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
         sendNotifications: true,
       })
     } else if (selectedDate) {
-      console.log("Setting form data for selected date:", {
-        selectedDate,
-        formattedDate: formatDateForInput(selectedDate),
-        dateString: selectedDate.toDateString(),
-      })
-
       setFormData((prev) => ({
         ...prev,
         date: formatDateForInput(selectedDate),
@@ -110,21 +112,13 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+
+    if (isLoading) return // Prevent double submission
 
     try {
       // Create date object from form data
       const [year, month, day] = formData.date.split("-").map(Number)
       const eventDate = new Date(year, month - 1, day, 12, 0, 0, 0) // Set to noon to avoid timezone issues
-
-      console.log("Creating event with date:", {
-        formDate: formData.date,
-        parsedYear: year,
-        parsedMonth: month - 1,
-        parsedDay: day,
-        createdDate: eventDate,
-        dateString: eventDate.toDateString(),
-      })
 
       const eventData = {
         title: formData.title,
@@ -137,12 +131,12 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
         color: formData.color,
       }
 
+      // Save the event first
       onSave(eventData)
 
-      // Отправляем Telegram уведомления если включены
+      // Send Telegram notifications if enabled (don't block the save operation)
       if (formData.sendNotifications && telegramSettings?.chatId && telegramSettings?.enableCreationConfirmations) {
         try {
-          // Отправляем подтверждение создания события
           await sendEventCreationConfirmation({
             title: formData.title,
             date: formData.date,
@@ -153,7 +147,6 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
             location: formData.location,
           })
 
-          // Планируем напоминание если установлено
           if (formData.reminder > 0 && telegramSettings?.enableReminders) {
             await sendEventNotification({
               title: formData.title,
@@ -165,22 +158,18 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
               location: formData.location,
             })
           }
-
-          toast({
-            title: event ? "Event updated" : "Event created",
-            description: "Telegram notifications have been sent successfully.",
-          })
-        } catch (error) {
-          console.error("Failed to send Telegram notifications:", error)
-          toast({
-            title: event ? "Event updated" : "Event created",
-            description: "Event saved but Telegram notifications could not be sent.",
-            variant: "destructive",
-          })
+        } catch (notificationError) {
+          console.error("Failed to send Telegram notifications:", notificationError)
+          // Don't show error to user as the event was saved successfully
         }
       }
-    } finally {
-      setIsLoading(false)
+    } catch (error) {
+      console.error("Error in form submission:", error)
+      toast({
+        title: "Error",
+        description: "Failed to process event data. Please check your inputs.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -211,6 +200,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
               onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
               placeholder="Enter event title"
               required
+              disabled={isLoading}
               className="transition-all duration-200 focus:scale-[1.02] text-base"
             />
           </div>
@@ -224,6 +214,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
               value={formData.description}
               onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
               placeholder="Enter event description (optional)"
+              disabled={isLoading}
               className="transition-all duration-200 focus:scale-[1.02] text-base resize-none"
               rows={3}
             />
@@ -238,14 +229,11 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
                 id="date"
                 type="date"
                 value={formData.date}
-                onChange={(e) => {
-                  console.log("Date input changed:", e.target.value)
-                  setFormData((prev) => ({ ...prev, date: e.target.value }))
-                }}
+                onChange={(e) => setFormData((prev) => ({ ...prev, date: e.target.value }))}
                 required
+                disabled={isLoading}
                 className="transition-all duration-200 focus:scale-[1.02] text-base"
               />
-              <p className="text-xs text-muted-foreground">Selected: {formData.date}</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="location" className="text-sm">
@@ -258,6 +246,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
                   value={formData.location}
                   onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
                   placeholder="Add location"
+                  disabled={isLoading}
                   className="pl-10 transition-all duration-200 focus:scale-[1.02] text-base"
                 />
               </div>
@@ -277,6 +266,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
                   value={formData.startTime}
                   onChange={(e) => setFormData((prev) => ({ ...prev, startTime: e.target.value }))}
                   required
+                  disabled={isLoading}
                   className="pl-10 transition-all duration-200 focus:scale-[1.02] text-base"
                 />
               </div>
@@ -293,6 +283,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
                   value={formData.endTime}
                   onChange={(e) => setFormData((prev) => ({ ...prev, endTime: e.target.value }))}
                   required
+                  disabled={isLoading}
                   className="pl-10 transition-all duration-200 focus:scale-[1.02] text-base"
                 />
               </div>
@@ -304,6 +295,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
             <Select
               value={formData.reminder.toString()}
               onValueChange={(value) => setFormData((prev) => ({ ...prev, reminder: Number.parseInt(value) }))}
+              disabled={isLoading}
             >
               <SelectTrigger className="transition-all duration-200 focus:scale-[1.02]">
                 <Bell className="h-4 w-4 mr-2" />
@@ -325,6 +317,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
               id="sendNotifications"
               checked={formData.sendNotifications}
               onChange={(e) => setFormData((prev) => ({ ...prev, sendNotifications: e.target.checked }))}
+              disabled={isLoading}
               className="rounded border-border"
             />
             <Label htmlFor="sendNotifications" className="text-sm flex items-center gap-2">
@@ -346,7 +339,8 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
                 <button
                   key={color}
                   type="button"
-                  className={`w-8 h-8 md:w-10 md:h-10 rounded-full transition-all duration-200 hover:scale-110 active:scale-95 ${
+                  disabled={isLoading}
+                  className={`w-8 h-8 md:w-10 md:h-10 rounded-full transition-all duration-200 hover:scale-110 active:scale-95 disabled:opacity-50 ${
                     formData.color === color ? "ring-2 ring-offset-2 ring-primary" : ""
                   }`}
                   style={{ backgroundColor: color }}
@@ -362,6 +356,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
                 type="button"
                 variant="destructive"
                 onClick={handleDelete}
+                disabled={isLoading}
                 className="hover:scale-105 active:scale-95 transition-transform duration-200 w-full md:w-auto"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
@@ -373,6 +368,7 @@ export function EventModal({ isOpen, onClose, onSave, onDelete, event, selectedD
                 type="button"
                 variant="outline"
                 onClick={onClose}
+                disabled={isLoading}
                 className="hover:scale-105 active:scale-95 transition-transform duration-200 flex-1 md:flex-none"
               >
                 Cancel

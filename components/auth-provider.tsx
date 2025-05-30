@@ -33,33 +33,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null)
       setLoading(false)
-
-      // Create user profile if signing up
-      if (event === "SIGNED_UP" && session?.user) {
-        await createUserProfile(session.user)
-      }
+      // User profile is now automatically created by the database trigger
     })
 
     return () => subscription.unsubscribe()
   }, [])
-
-  const createUserProfile = async (user: User) => {
-    try {
-      const { error } = await supabase.from("users").insert([
-        {
-          id: user.id,
-          email: user.email!,
-          full_name: user.user_metadata?.full_name || "",
-        },
-      ])
-
-      if (error) {
-        console.error("Error creating user profile:", error)
-      }
-    } catch (error) {
-      console.error("Error creating user profile:", error)
-    }
-  }
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

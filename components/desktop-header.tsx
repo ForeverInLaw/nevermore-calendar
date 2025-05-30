@@ -80,7 +80,7 @@ export function DesktopHeader({
   }
 
   return (
-    <div className="hidden md:flex items-center justify-between mb-6 px-4">
+    <div className="hidden md:flex items-center justify-between mb-8 px-6 pt-8 pb-4">
       <div className="flex items-center gap-4">
         <div className="relative overflow-hidden">
           <h1

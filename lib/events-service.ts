@@ -7,11 +7,11 @@ export function dbEventToAppEvent(dbEvent: DatabaseEvent): Event {
   return {
     id: dbEvent.id,
     title: dbEvent.title,
-    description: dbEvent.description,
+    description: dbEvent.description || undefined,
     date: new Date(dbEvent.event_date + "T12:00:00"), // Set to noon to avoid timezone issues
     startTime: dbEvent.start_time,
     endTime: dbEvent.end_time,
-    location: dbEvent.location,
+    location: dbEvent.location || undefined,
     color: dbEvent.color,
     reminder: dbEvent.reminder_minutes,
   }
@@ -39,122 +39,208 @@ export function appEventToDbEvent(
 export class EventsService {
   // Get all events for the current user
   static async getEvents(): Promise<Event[]> {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
 
-    if (!user) {
-      throw new Error("User not authenticated")
-    }
+      if (userError) {
+        throw new Error(`Authentication error: ${userError.message}`)
+      }
 
-    const { data, error } = await supabase
-      .from("events")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("event_date", { ascending: true })
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
 
-    if (error) {
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("event_date", { ascending: true })
+
+      if (error) {
+        throw new Error(`Database error: ${error.message}`)
+      }
+
+      return (data || []).map(dbEventToAppEvent)
+    } catch (error) {
+      console.error("Error in getEvents:", error)
       throw error
     }
-
-    return data.map(dbEventToAppEvent)
   }
 
   // Create a new event
   static async createEvent(event: Omit<Event, "id">): Promise<Event> {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
 
-    if (!user) {
-      throw new Error("User not authenticated")
-    }
+      if (userError) {
+        throw new Error(`Authentication error: ${userError.message}`)
+      }
 
-    const dbEvent = appEventToDbEvent(event, user.id)
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
 
-    const { data, error } = await supabase.from("events").insert([dbEvent]).select().single()
+      // Check if user exists in the users table
+      const { data: userData, error: userCheckError } = await supabase
+        .from("users")
+        .select("id")
+        .eq("id", user.id)
+        .single()
 
-    if (error) {
+      if (userCheckError || !userData) {
+        console.log("User not found in users table, creating profile...")
+        // Create user profile if it doesn't exist
+        const { error: insertError } = await supabase.from("users").insert([
+          {
+            id: user.id,
+            email: user.email!,
+            full_name: user.user_metadata?.full_name || "",
+            telegram_notifications_enabled: true,
+            reminder_notifications_enabled: true,
+            creation_notifications_enabled: true,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ])
+
+        if (insertError) {
+          throw new Error(`Failed to create user profile: ${insertError.message}`)
+        }
+      }
+
+      const dbEvent = appEventToDbEvent(event, user.id)
+
+      const { data, error } = await supabase.from("events").insert([dbEvent]).select().single()
+
+      if (error) {
+        throw new Error(`Database error: ${error.message}`)
+      }
+
+      if (!data) {
+        throw new Error("No data returned from database")
+      }
+
+      return dbEventToAppEvent(data)
+    } catch (error) {
+      console.error("Error in createEvent:", error)
       throw error
     }
-
-    return dbEventToAppEvent(data)
   }
 
   // Update an existing event
   static async updateEvent(eventId: string, event: Omit<Event, "id">): Promise<Event> {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
 
-    if (!user) {
-      throw new Error("User not authenticated")
-    }
+      if (userError) {
+        throw new Error(`Authentication error: ${userError.message}`)
+      }
 
-    const dbEvent = appEventToDbEvent(event, user.id)
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
 
-    const { data, error } = await supabase
-      .from("events")
-      .update({ ...dbEvent, updated_at: new Date().toISOString() })
-      .eq("id", eventId)
-      .eq("user_id", user.id) // Ensure user can only update their own events
-      .select()
-      .single()
+      const dbEvent = appEventToDbEvent(event, user.id)
 
-    if (error) {
+      const { data, error } = await supabase
+        .from("events")
+        .update({ ...dbEvent, updated_at: new Date().toISOString() })
+        .eq("id", eventId)
+        .eq("user_id", user.id) // Ensure user can only update their own events
+        .select()
+        .single()
+
+      if (error) {
+        throw new Error(`Database error: ${error.message}`)
+      }
+
+      if (!data) {
+        throw new Error("No data returned from database")
+      }
+
+      return dbEventToAppEvent(data)
+    } catch (error) {
+      console.error("Error in updateEvent:", error)
       throw error
     }
-
-    return dbEventToAppEvent(data)
   }
 
   // Delete an event
   static async deleteEvent(eventId: string): Promise<void> {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
 
-    if (!user) {
-      throw new Error("User not authenticated")
-    }
+      if (userError) {
+        throw new Error(`Authentication error: ${userError.message}`)
+      }
 
-    const { error } = await supabase.from("events").delete().eq("id", eventId).eq("user_id", user.id) // Ensure user can only delete their own events
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
 
-    if (error) {
+      const { error } = await supabase.from("events").delete().eq("id", eventId).eq("user_id", user.id) // Ensure user can only delete their own events
+
+      if (error) {
+        throw new Error(`Database error: ${error.message}`)
+      }
+    } catch (error) {
+      console.error("Error in deleteEvent:", error)
       throw error
     }
   }
 
   // Get events that need reminders
   static async getEventsNeedingReminders(): Promise<DatabaseEvent[]> {
-    const now = new Date()
-    const { data, error } = await supabase
-      .from("events")
-      .select(`
-        *,
-        users!inner(telegram_chat_id, reminder_notifications_enabled)
-      `)
-      .eq("reminder_sent", false)
-      .eq("users.reminder_notifications_enabled", true)
-      .not("users.telegram_chat_id", "is", null)
-      .gte("event_date", now.toISOString().split("T")[0])
+    try {
+      const now = new Date()
+      const { data, error } = await supabase
+        .from("events")
+        .select(`
+          *,
+          users!inner(telegram_chat_id, reminder_notifications_enabled)
+        `)
+        .eq("reminder_sent", false)
+        .eq("users.reminder_notifications_enabled", true)
+        .not("users.telegram_chat_id", "is", null)
+        .gte("event_date", now.toISOString().split("T")[0])
 
-    if (error) {
+      if (error) {
+        throw new Error(`Database error: ${error.message}`)
+      }
+
+      return (data || []).filter((event) => {
+        const eventDateTime = new Date(`${event.event_date}T${event.start_time}`)
+        const reminderTime = new Date(eventDateTime.getTime() - event.reminder_minutes * 60 * 1000)
+        return reminderTime <= now
+      })
+    } catch (error) {
+      console.error("Error in getEventsNeedingReminders:", error)
       throw error
     }
-
-    return data.filter((event) => {
-      const eventDateTime = new Date(`${event.event_date}T${event.start_time}`)
-      const reminderTime = new Date(eventDateTime.getTime() - event.reminder_minutes * 60 * 1000)
-      return reminderTime <= now
-    })
   }
 
   // Mark reminder as sent
   static async markReminderSent(eventId: string): Promise<void> {
-    const { error } = await supabase.from("events").update({ reminder_sent: true }).eq("id", eventId)
+    try {
+      const { error } = await supabase.from("events").update({ reminder_sent: true }).eq("id", eventId)
 
-    if (error) {
+      if (error) {
+        throw new Error(`Database error: ${error.message}`)
+      }
+    } catch (error) {
+      console.error("Error in markReminderSent:", error)
       throw error
     }
   }
