@@ -113,7 +113,7 @@ export function MobileCalendarView({
                 {/* События дня */}
                 {dayEvents.length > 0 && (
                   <div className="space-y-2">
-                    {dayEvents.slice(0, 3).map((event) => (
+                    {dayEvents.map((event) => (
                       <div
                         key={event.id}
                         className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-muted/50"
@@ -132,11 +132,6 @@ export function MobileCalendarView({
                         </div>
                       </div>
                     ))}
-                    {dayEvents.length > 3 && (
-                      <div className="text-xs text-muted-foreground text-center">
-                        +{dayEvents.length - 3} more events
-                      </div>
-                    )}
                   </div>
                 )}
               </CardContent>
